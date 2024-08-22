@@ -327,6 +327,11 @@ class ConfigureHelpdesk extends Command
         $output->writeln("  Exiting evaluation process.\n");
 
         try {
+            // Call the ipinfo.io API to get location details
+            $ip = gethostbyname($this->container->getParameter('uvdesk.site_url'));
+            $response = file_get_contents("http://ipinfo.io/{$ip}/json");
+            $details = json_decode($response);
+
             // Initialize cURL session
             $ch = curl_init(self::API_ENDPOINT);
         
@@ -341,7 +346,7 @@ class ConfigureHelpdesk extends Command
                 'domain'       => $this->container->getParameter('uvdesk.site_url'),
                 'email'        => $this->userEmail,
                 'name'         => $this->userName,
-                'country_code' => 'IN',
+                'country_code' => $details->country,
             ];
         
             // Convert data to JSON
