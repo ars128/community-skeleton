@@ -17,14 +17,24 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class ConfigureHelpdesk extends Command
 {
-    CONST CLS = "\033[H"; // Clear screen
-    CONST CLL = "\033[K"; // Clear line
-    CONST MCH = "\033[2J"; // Move cursor home
-    CONST MCA = "\033[1A"; // Move cursor up one point
+    /**
+     * Api endpoint
+     *
+     * @var string
+     */
+    protected const API_ENDPOINT = 'http://192.168.15.206/uvdesk-opensource/public/api/updates';
+
+    const CLS = "\033[H"; // Clear screen
+    const CLL = "\033[K"; // Clear line
+    const MCH = "\033[2J"; // Move cursor home
+    const MCA = "\033[1A"; // Move cursor up one point
 
     private $container;
     private $entityManager;
     private $questionHelper;
+
+    private $userName;
+    private $userEmail;
 
     public function __construct(ContainerInterface $container)
     {
@@ -258,7 +268,8 @@ class ConfigureHelpdesk extends Command
                 do {
                     $u_email = $this->askInteractiveQuestion("<info>Email</info>: ", null, 6, false, false, "Please enter a valid email address");
                     $u_email = filter_var($u_email, FILTER_SANITIZE_EMAIL);
-
+                    $this->userEmail = $u_email;
+                    
                     if ($warningFlag) {
                         $output->write([self::MCA, self::CLL]);
                     }
@@ -272,6 +283,7 @@ class ConfigureHelpdesk extends Command
                 $u_name = $this->askInteractiveQuestion("<info>Name</info>: ", null, 6, false, false, "Please enter your name");
 
                 $warningFlag = false;
+                $this->userName = $u_name;
 
                 do {
                     $u_password = $this->askInteractiveQuestion("<info>Password</info>: ", null, 6, false, true, "Please enter your password");
@@ -313,6 +325,48 @@ class ConfigureHelpdesk extends Command
         }
 
         $output->writeln("  Exiting evaluation process.\n");
+
+        try {
+            // Initialize cURL session
+            $ch = curl_init(self::API_ENDPOINT);
+        
+            // Set the headers
+            $headers = [
+                'Accept: application/json',
+                'Content-Type: application/json',
+            ];
+        
+            // Prepare the data to be sent in JSON format
+            $data = [
+                'domain'       => $this->container->getParameter('uvdesk.site_url'),
+                'email'        => $this->userEmail,
+                'name'         => $this->userName,
+                'country_code' => 'IN',
+            ];
+        
+            // Convert data to JSON
+            $jsonData = json_encode($data);
+        
+            // Set cURL options
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+        
+            // Execute cURL request
+            $response = curl_exec($ch);
+        
+            // Check if any error occurred
+            if ($response === false) {
+                $error = curl_error($ch);
+                $errorCode = curl_errno($ch);
+                throw new \Exception("cURL Error: $error (Code: $errorCode)");
+            }
+        
+            // Close cURL session
+            curl_close($ch);
+        } catch (\Exception $e) {            
+        }
 
         return Command::SUCCESS;
     }
